@@ -1,27 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "services": {
-    "api": {
-      "root": "api",
-      "framework": "hono"
-    },
-    "web": {
-      "root": "web",
-      "framework": "vite"
-    }
-  },
+  "buildCommand": "pnpm --filter bill-splitter-web build",
+  "outputDirectory": "web/dist",
+  "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": {
-        "service": "api"
-      }
-    },
-    {
       "source": "/(.*)",
-      "destination": {
-        "service": "web"
-      }
+      "destination": "/index.html"
     }
   ]
 }
