@@ -58,4 +58,3 @@ export function Topbar({ householdName, onOpenAddRoommate }: TopbarProps) {
     </header>
   )
 }
-

@@ -131,4 +131,3 @@ export function CategoryIcon({ title }: { title: string }) {
     </svg>
   )
 }
-

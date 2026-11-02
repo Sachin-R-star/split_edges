@@ -29,4 +29,3 @@ export function ToastDock({ toasts, onRemoveToast }: ToastDockProps) {
     </div>
   )
 }
-
