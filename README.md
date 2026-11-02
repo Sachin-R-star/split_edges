@@ -155,3 +155,27 @@ You must understand every line you submit. We check this with your video and in 
 5. Paste the repository link and the video link in the application form.
 
 We will run `pnpm install && pnpm check && pnpm typecheck && pnpm test` on your repository.
+
+## Decisions
+
+### 1. Atomic Compare-and-Set with Idempotency Key Tracking
+
+- **Decision:** We execute share payments using an atomic conditional update (`UPDATE shares SET paid_at = ?, idempotency_key = ? WHERE id = ? AND bill_id = ? AND paid_at IS NULL`) paired with the `uq_shares_idempotency` unique constraint.
+- **Why:** In serverless distributed environments like Cloudflare Workers, multiple payment requests can arrive concurrently for the same share. This atomic query guarantees that exactly one execution transitions the row from unpaid to paid. If a concurrent or repeated request arrives:
+  - If it carries the same `Idempotency-Key`, the endpoint returns `200` with the original payment response and identical timestamp.
+  - If it carries a different key or attempts to pay an already settled share, it returns `409 Conflict`.
+    This prevents double-spending and race conditions without requiring distributed locking.
+
+### 2. Monotonic RowID Ordering and Integer Cent Arithmetic
+
+- **Decision:** All currency values are strictly stored as integer cents with `Number.isInteger(cents) && cents > 0` validation. Extra cents from uneven splits (`totalCents % N`) are distributed to members ordered strictly by SQLite `rowid ASC`.
+- **Why:** Floating-point numbers suffer from precision loss in JavaScript and SQL (e.g. `0.1 + 0.2 !== 0.3`). By computing integer `Math.floor(totalCents / N)` and assigning the remainder cents to members in their true insertion order (guaranteed by SQLite's internal monotonic `rowid`), we guarantee mathematical conservation of money: the sum of generated shares always equals `totalCents` down to the exact cent.
+
+### 3. Defense-in-Depth Schema with Named Constraints
+
+- **Decision:** We defined explicit named constraints in the D1 SQLite migration (`0001_init.sql`):
+  - `CONSTRAINT fk_members_home`: Stops orphan members by ensuring every member belongs to an existing home.
+  - `CONSTRAINT fk_bills_home` & `CONSTRAINT fk_shares_bill`: Stops orphan bills and shares, cascading deletions cleanly.
+  - `CONSTRAINT chk_bills_total_cents` & `CONSTRAINT chk_shares_amount_cents`: Stops non-positive, zero, or negative financial values at the database layer.
+  - `CONSTRAINT uq_shares_idempotency`: Stops duplicate idempotency keys from being applied across shares.
+- **Why:** Application validation can occasionally be bypassed by direct database queries, scripts, or regressions. Defining these constraints directly in SQLite guarantees that the database engine itself enforces business rules and referential integrity.
